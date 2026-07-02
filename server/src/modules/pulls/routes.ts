@@ -129,6 +129,22 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // Total run COST per PR for the list's COST column. Same JS-grouping
+    // pattern as the score query above (no SQL sum/groupBy in this codebase):
+    // sum every non-null costUsd per PR; a PR with zero priced runs stays null
+    // rather than showing a misleading $0.00.
+    const totalCostByPr = new Map<string, number>();
+    if (prIds.length > 0) {
+      const runRows = await container.db
+        .select({ prId: t.agentRuns.prId, costUsd: t.agentRuns.costUsd })
+        .from(t.agentRuns)
+        .where(inArray(t.agentRuns.prId, prIds));
+      for (const run of runRows) {
+        if (run.prId == null || run.costUsd == null) continue;
+        totalCostByPr.set(run.prId, (totalCostByPr.get(run.prId) ?? 0) + run.costUsd);
+      }
+    }
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
@@ -153,6 +169,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        total_cost_usd: totalCostByPr.get(r.id) ?? null,
       };
     });
   });

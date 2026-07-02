@@ -1,4 +1,8 @@
-import type { FindingActionKind } from "@devdigest/shared";
+import type { FindingActionKind, Severity } from "@devdigest/shared";
+
+/** The severities that actually appear in finding data, in display order.
+    (The `@devdigest/ui` token map also has `INFO`, which never occurs here.) */
+export const DATA_SEVERITIES: readonly Severity[] = ["CRITICAL", "WARNING", "SUGGESTION"];
 
 /** Sort weight per severity (lower = shown first). */
 export const SEVERITY_ORDER: Record<string, number> = {

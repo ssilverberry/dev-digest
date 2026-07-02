@@ -4,8 +4,8 @@
  * a settled run is colored/labelled by its denormalized blocker/finding counts,
  * and shows the review score ring.
  */
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { RunSummary } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
@@ -25,6 +25,7 @@ function run(o: Partial<RunSummary>): RunSummary {
     duration_ms: 1000,
     tokens_in: 100,
     tokens_out: 50,
+    cost_usd: null,
     findings_count: 0,
     grounding: "0/0 passed",
     ran_at: "2026-06-11T18:44:34.000Z",
@@ -71,5 +72,63 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — cost badge", () => {
+  it("a settled run with tokens + cost shows 'N tok · $cost'", () => {
+    renderRuns([run({ status: "done", tokens_in: 100, tokens_out: 50, cost_usd: 0.012 })]);
+    expect(screen.getByText("150 tok · $0.012")).toBeInTheDocument();
+  });
+
+  it("a settled run with no tokens and no cost shows an em dash", () => {
+    renderRuns([run({ status: "done", tokens_in: 0, tokens_out: 0, cost_usd: null })]);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("a running run shows no cost badge", () => {
+    renderRuns([run({ status: "running", tokens_in: 0, tokens_out: 0, cost_usd: null, score: null, blockers: null })]);
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+    expect(screen.queryByText(/tok ·/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — row opens trace", () => {
+  it("clicking anywhere on a run row opens its trace", () => {
+    const onOpenTrace = vi.fn();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <RunHistory runs={[run({ run_id: "run-42" })]} onOpenTrace={onOpenTrace} />
+      </NextIntlClientProvider>,
+    );
+    // Click a neutral part of the row (the provider/model label), not a control.
+    fireEvent.click(screen.getByText("openrouter/deepseek/deepseek-v4-flash"));
+    expect(onOpenTrace).toHaveBeenCalledWith("run-42");
+  });
+
+  it("clicking the agent name goes to the review, not the trace (stopPropagation)", () => {
+    const onOpenTrace = vi.fn();
+    const onGoToReview = vi.fn();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <RunHistory runs={[run({ run_id: "run-7" })]} onOpenTrace={onOpenTrace} onGoToReview={onGoToReview} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByText("Security Reviewer"));
+    expect(onGoToReview).toHaveBeenCalledWith("run-7");
+    expect(onOpenTrace).not.toHaveBeenCalled();
+  });
+
+  it("clicking delete removes the run without opening the trace (stopPropagation)", () => {
+    const onOpenTrace = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <RunHistory runs={[run({ run_id: "run-9" })]} onOpenTrace={onOpenTrace} onDelete={onDelete} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByLabelText(messages.timeline.deleteRun));
+    expect(onDelete).toHaveBeenCalledWith("run-9");
+    expect(onOpenTrace).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
+import { RunCostBadge } from "@/components/RunCostBadge";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 
 /**
@@ -100,6 +101,7 @@ export function RunHistory({
   onDelete?: (runId: string) => void;
 }) {
   const t = useTranslations("prReview");
+  const [hoveredRun, setHoveredRun] = React.useState<string | null>(null);
   if (runs.length === 0 && commits.length === 0) return null;
 
   const items: TimelineItem[] = [
@@ -150,7 +152,19 @@ export function RunHistory({
         const o = outcomeOf(r);
         const settled = r.status === "done";
         return (
-          <div key={`run:${r.run_id}`} style={rowStyle}>
+          // Whole row opens the trace drawer; the inner controls (agent name,
+          // trace icon, delete) stopPropagation to keep their own actions.
+          <div
+            key={`run:${r.run_id}`}
+            onClick={() => onOpenTrace(r.run_id)}
+            onMouseEnter={() => setHoveredRun(r.run_id)}
+            onMouseLeave={() => setHoveredRun(null)}
+            style={{
+              ...rowStyle,
+              cursor: "pointer",
+              ...(hoveredRun === r.run_id ? { background: "var(--bg-hover)" } : null),
+            }}
+          >
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
               {t(`runStatus.${o.key}`)}
             </Badge>
@@ -159,7 +173,10 @@ export function RunHistory({
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
                 <button
                   type="button"
-                  onClick={() => onGoToReview?.(r.run_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGoToReview?.(r.run_id);
+                  }}
                   title={t("timeline.goToReview")}
                   style={{
                     background: "none",
@@ -197,12 +214,18 @@ export function RunHistory({
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
               {r.ran_at && <span>{new Date(r.ran_at).toLocaleTimeString()}</span>}
+              {settled && (
+                <RunCostBadge variant="withTokens" tokensIn={r.tokens_in} tokensOut={r.tokens_out} cost={r.cost_usd} />
+              )}
             </div>
             <button
               type="button"
               title={t("timeline.openTrace")}
               aria-label={t("timeline.openTrace")}
-              onClick={() => onOpenTrace(r.run_id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenTrace(r.run_id);
+              }}
               style={iconBtnStyle}
             >
               <Icon.FileText size={13} />
@@ -212,7 +235,10 @@ export function RunHistory({
                 role="button"
                 aria-label={t("timeline.deleteRun")}
                 title={t("timeline.deleteRun")}
-                onClick={() => onDelete(r.run_id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(r.run_id);
+                }}
                 style={{ display: "inline-flex", padding: 3, borderRadius: 5, color: "var(--text-muted)", flexShrink: 0, cursor: "pointer" }}
               >
                 <Icon.Trash size={13} />
